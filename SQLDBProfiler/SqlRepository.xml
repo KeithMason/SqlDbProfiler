@@ -1,0 +1,1183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<queries xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <query description="Performance - Stored Procedure I/O Requests"><![CDATA[---------------------------------------------------
+-- Stored Procedure I/O Requests 
+---------------------------------------------------
+SELECT 
+    Db_name(st.dbid)                                 AS [DatabaseName],
+    Object_schema_name(objectid, st.dbid)            AS [SchemaName],
+    Object_name(objectid, st.dbid)                   AS [StoredProcedure],
+    Max(cp.usecounts)                                AS [ExecCount],
+    Sum(qs.total_physical_reads 
+       + qs.total_logical_reads 
+       + qs.total_logical_writes)                    AS [Total_IO],
+    Sum(qs.total_physical_reads 
+       + qs.total_logical_reads 
+       + qs.total_logical_writes) 
+       / ( Max(cp.usecounts) )                       AS [AvgTotal_IO],
+    Sum(qs.total_physical_reads)                     AS [TotalPhyReads],
+    Cast(Sum(qs.total_physical_reads) 
+       / ( Max(cp.usecounts) * 1.0 ) AS INT)         AS [AvgPhyReads],
+    Cast(Sum(qs.total_logical_reads) AS INT)         AS [TotalLogicalReads],
+    Cast(Sum(qs.total_logical_reads) 
+       / ( Max(cp.usecounts) * 1.0 ) AS INT)         AS [AvgLogicalReads],
+    Cast(Sum(qs.total_logical_writes) AS INT)        AS [TotalLogicalWrites],
+    Cast(Sum(qs.total_logical_writes) 
+       / ( Max(cp.usecounts) * 1.0 ) AS INT)         AS [AvgLogicalWrites]
+FROM sys.dm_exec_query_stats qs 
+     CROSS APPLY sys.Dm_exec_sql_text(qs.plan_handle) st 
+     JOIN sys.dm_exec_cached_plans cp ON qs.plan_handle = cp.plan_handle 
+WHERE  Db_name(st.dbid) IS NOT NULL 
+     AND cp.objtype = 'proc' 
+GROUP  BY Db_name(st.dbid), 
+          Object_schema_name(objectid, st.dbid), 
+          Object_name(objectid, st.dbid) 
+ORDER  BY Sum(qs.total_physical_reads 
+              + qs.total_logical_reads 
+              + qs.total_logical_writes) DESC  ]]></query>
+  <query description="Performance - Stored Procedure Timing"><![CDATA[---------------------------------------------------
+-- Stored Procedure Timing
+---------------------------------------------------
+SELECT 
+       Db_name(st.dbid)                               AS [DatabaseName], 
+       Object_schema_name(objectid, st.dbid)          AS [SchemaName], 
+       Object_name(objectid, st.dbid)                 AS [StoredProcedure], 
+       Max(cp.usecounts)                              AS [ExecCount], 
+       Sum(qs.total_elapsed_time)                     AS [TotalElapsedTime], 
+       Sum(qs.total_elapsed_time) / Max(cp.usecounts) AS [AvgElapsedTime] 
+FROM   sys.dm_exec_query_stats qs 
+       CROSS apply sys.Dm_exec_sql_text(qs.plan_handle) st 
+       JOIN sys.dm_exec_cached_plans cp 
+         ON qs.plan_handle = cp.plan_handle 
+WHERE  Db_name(st.dbid) IS NOT NULL 
+       AND cp.objtype = 'proc' 
+GROUP  BY Db_name(st.dbid), 
+          Object_schema_name(objectid, st.dbid), 
+          Object_name(objectid, st.dbid) 
+ORDER  BY Sum(qs.total_elapsed_time) DESC  ]]></query>
+  <query description="Development - Split Comma Delimited List Function"><![CDATA[---------------------------------------------------
+-- Split Comma Delimited List Function
+---------------------------------------------------
+SET ansi_nulls ON
+GO
+SET quoted_identifier ON
+GO
+-------------------------------------------
+-- Description: 
+-- Splits a varchar delimited list and 
+-- returns a table of the varchar values
+-------------------------------------------
+CREATE FUNCTION [SPLITCOMMADELIMITEDLIST] (@DelimitedList NVARCHAR(max))
+returns @StringTable TABLE (
+  [value] NVARCHAR(500))
+AS
+  BEGIN
+      DECLARE @delimit  NVARCHAR(1),
+              @position INT,
+              @string   NVARCHAR(max),
+              @piece    NVARCHAR(500)
+
+      SET @delimit = ','
+      SET @string = @DelimitedList
+
+      IF RIGHT(RTRIM(@string), 1) <> @delimit
+        SET @string = @string + @delimit
+
+      SET @position = PATINDEX('%' + @delimit + '%', @string)
+
+      WHILE @position <> 0
+        BEGIN
+            SET @piece = LEFT(@string, @position - 1)
+
+            IF @piece = 'NULL'
+              SET @piece = NULL
+
+            INSERT INTO @StringTable
+                        ([value])
+            VALUES      (@piece)
+
+            SET @string = STUFF(@string, 1, @position, '')
+            SET @position = PATINDEX('%' + @delimit + '%', @string)
+        END
+
+      RETURN
+  END
+GO]]></query>
+  <query description="Maintenance - Database Reindexing"><![CDATA[---------------------------------------------------
+-- Database Reindexing
+---------------------------------------------------
+USE [MyDatabase]
+GO
+
+EXEC sp_MSforeachtable @command1="print '?' DBCC DBREINDEX ('?', ' ', 0)" 
+GO 
+
+EXEC sp_updatestats 
+GO 
+
+DBCC SHOWCONTIG WITH TABLERESULTS, ALL_INDEXES;
+GO]]></query>
+  <query description="Maintenance - Template to Create a Clustered Index"><![CDATA[---------------------------------------------------
+-- Template to Create a Clustered Index
+---------------------------------------------------
+USE AdventureWorks;
+GO
+
+-- Create a new table with three columns.
+CREATE TABLE dbo.TestTable
+    (TestCol1 int NOT NULL,
+     TestCol2 nchar(10) NULL,
+     TestCol3 nvarchar(50) NULL);
+GO
+
+-- Create a clustered index called IX_TestTable_TestCol1
+-- on the dbo.TestTable table using the TestCol1 column.
+
+CREATE CLUSTERED INDEX IX_TestTable_TestCol1 
+    ON dbo.TestTable (TestCol1); 
+GO]]></query>
+  <query description="Maintenance - Template to Create a Non-clustered Index"><![CDATA[---------------------------------------------------
+-- Template to Create a Non-clustered Index
+---------------------------------------------------
+USE AdventureWorks;
+GO
+
+-- Find an existing index named IX_ProductVendor_VendorID and delete it if found. 
+IF EXISTS (SELECT name FROM sys.indexes
+            WHERE name = N'IX_ProductVendor_VendorID') 
+    DROP INDEX IX_ProductVendor_VendorID ON Purchasing.ProductVendor; 
+GO
+
+-- Create a nonclustered index called IX_ProductVendor_VendorID 
+-- on the Purchasing.ProductVendor table using the BusinessEntityID column. 
+
+CREATE NONCLUSTERED INDEX IX_ProductVendor_VendorID 
+    ON Purchasing.ProductVendor (BusinessEntityID); 
+GO]]></query>
+  <query description="Maintenance - Template to Create a Unique Index"><![CDATA[---------------------------------------------------
+-- Template to Create a Unique Index
+---------------------------------------------------
+USE AdventureWorks;
+GO
+
+-- Find an existing index named AK_UnitMeasure_Name and delete it if found
+IF EXISTS (SELECT name from sys.indexes
+           WHERE name = N'AK_UnitMeasure_Name') 
+   DROP INDEX AK_UnitMeasure_Name ON Production.UnitMeasure; 
+GO
+
+-- Create a unique index called AK_UnitMeasure_Name
+-- on the Production.UnitMeasure table using the Name column.
+
+CREATE UNIQUE INDEX AK_UnitMeasure_Name 
+   ON Production.UnitMeasure (Name); 
+GO]]></query>
+  <query description="Maintenance - Template to Create an Index with Included Columns"><![CDATA[---------------------------------------------------
+-- Template to Create an Index with Included Columns
+---------------------------------------------------
+USE AdventureWorks;
+GO
+
+-- Creates a nonclustered index on the Person.Address table 
+-- with four included (nonkey) columns. 
+
+-- Index key column is PostalCode and the nonkey columns are
+-- AddressLine1, AddressLine2, City, and StateProvinceID.
+
+CREATE NONCLUSTERED INDEX IX_Address_PostalCode
+ON Person.Address (PostalCode)
+INCLUDE (AddressLine1, AddressLine2, City, StateProvinceID);
+GO]]></query>
+  <query description="Performance - Adhoc queries memory consumption total"><![CDATA[---------------------------------------------------
+-- Adhoc queries memory consumption total
+---------------------------------------------------
+SELECT TOP 20 DB_NAME(qt.dbid)                                   AS [DatabaseName],      
+              SUM(qs.total_physical_reads)                       AS [DiskReads],         
+              SUM(qs.total_logical_reads)                        AS [MemoryReads],       
+              SUM(qs.total_physical_reads                             
+                + qs.total_logical_reads)                        AS [Total_IO_Reads],                  
+              SUM(qs.execution_count)                            AS [Executions],        
+              SUM(( qs.total_physical_reads                         
+                + qs.total_logical_reads ) / qs.execution_count) AS [IO_Per_Execution],                  
+              SUM(qs.total_worker_time)                          AS [CPUTime],           
+              SUM(qs.total_elapsed_time)                         AS [DiskWaitAndCPUTime],
+              SUM(qs.max_logical_writes)                         AS [MemoryWrites],      
+              MAX(qs.last_execution_time)                        AS [DateLastExecuted],  
+              qt.text                                            AS [TextData]          
+FROM   sys.dm_exec_query_stats AS qs
+       CROSS apply sys.DM_EXEC_SQL_TEXT(qs.sql_handle) AS qt
+WHERE  OBJECT_SCHEMA_NAME(qt.objectid, dbid) + '.'
+       + OBJECT_NAME(qt.objectid, qt.dbid) IS NULL
+GROUP  BY DB_NAME(qt.dbid),
+          qt.text,
+          OBJECT_SCHEMA_NAME(qt.objectid, dbid) + '.'
+          + OBJECT_NAME(qt.objectid, qt.dbid)
+ORDER  BY total_io_reads DESC]]></query>
+  <query description="Performance - Adhoc queries memory consumption/execution"><![CDATA[---------------------------------------------------
+-- Adhoc queries memory consumption/execution
+---------------------------------------------------
+SELECT TOP 20 DB_NAME(qt.dbid)                                   AS [DatabaseName],       
+              SUM(qs.total_physical_reads)                       AS [DiskReads],          
+              SUM(qs.total_logical_reads)                        AS [MemoryReads],        
+              SUM(qs.total_physical_reads                              
+                + qs.total_logical_reads)                        AS [Total_IO_Reads],                   
+              SUM(qs.execution_count)                            AS [Executions],         
+              SUM(( qs.total_physical_reads                          
+                + qs.total_logical_reads ) / qs.execution_count) AS [IO_Per_Execution],                   
+              SUM(qs.total_worker_time)                          AS [CPUTime],            
+              SUM(qs.total_elapsed_time)                         AS [DiskWaitAndCPUTime], 
+              SUM(qs.max_logical_writes)                         AS [MemoryWrites],       
+              MAX(qs.last_execution_time)                        AS [DateLastExecuted],   
+              qt.text                                            AS [TextData]           
+FROM   sys.dm_exec_query_stats AS qs
+       CROSS apply sys.DM_EXEC_SQL_TEXT(qs.sql_handle) AS qt
+WHERE  OBJECT_SCHEMA_NAME(qt.objectid, dbid) + '.'
+       + OBJECT_NAME(qt.objectid, qt.dbid) IS NULL
+GROUP  BY DB_NAME(qt.dbid),
+          qt.text,
+          OBJECT_SCHEMA_NAME(qt.objectid, dbid) + '.'
+          + OBJECT_NAME(qt.objectid, qt.dbid)
+ORDER  BY io_per_execution DESC]]></query>
+  <query description="Performance - Aggregate Query Performance"><![CDATA[---------------------------------------------------
+-- Aggregate Query Performance
+---------------------------------------------------
+SELECT TOP 20 ( qs.total_logical_reads / qs.execution_count )    AS [AvgLogicalReads],
+              SUBSTRING(qt.text, statement_start_offset / 2 + 1, 
+              ( CASE
+                     WHEN statement_end_offset = -1 THEN LEN(
+                     CONVERT(NVARCHAR(max), text)) * 2
+                     ELSE statement_end_offset
+                END - statement_start_offset ) / 2)              AS [TextData],
+              ( qs.total_logical_writes / qs.execution_count )   AS [AvgLogicalWrites],
+              ( qs.total_physical_reads / qs.execution_count )   AS [AvgPhysReads],
+              ( qs.total_worker_time / qs.execution_count )      AS [AvgCpuOverhead],
+              qs.total_logical_reads                             AS [TotalLogicalReads],
+              qs.total_logical_writes                            AS [TotalLogcalWrites],
+              qs.total_physical_reads                            AS [TotalPhyReads],
+              qs.total_worker_time                               AS [TotalWorkerTime],
+              qs.execution_count                                 AS [ExecutionCount],
+              qs.total_elapsed_time                              AS [Duration],
+              qs.plan_generation_num                             AS [NumRecompiles],
+              qs.statement_start_offset                          AS [StmtStartOffset]
+FROM   sys.dm_exec_query_stats qs
+       CROSS apply sys.DM_EXEC_SQL_TEXT(qs.sql_handle) AS qt
+ORDER  BY ( total_logical_reads + total_logical_writes ) / execution_count DESC]]></query>
+  <query description="Performance - Busiest Databases in this Server"><![CDATA[---------------------------------------------------
+-- Busiest Databases in this Server
+---------------------------------------------------
+SELECT ISNULL(DB_NAME(dest.dbid), 'Adhoc SQL')     AS [DatabaseName],
+       SUM(deqs.total_logical_reads)               AS [TotalPageReads],
+       SUM(deqs.total_logical_writes)              AS [TotalPageWrites],
+       SUM(deqs.execution_count)                   AS [ExecutionCount],
+       SUM(deqs.total_worker_time)                 AS [TotalWorkerTime],
+       MIN(deqs.min_worker_time)                   AS [MinWorkerTime],
+       MAX(deqs.max_worker_time)                   AS [MaxWorkerTime],
+       MAX(deqs.last_execution_time)               AS [LastExecution]
+FROM   sys.dm_exec_query_stats deqs
+       CROSS apply sys.DM_EXEC_SQL_TEXT(deqs.sql_handle) AS dest
+GROUP  BY DB_NAME(dest.dbid) ]]></query>
+  <query description="Performance - Cache information"><![CDATA[---------------------------------------------------
+-- Cache information
+---------------------------------------------------
+SELECT DISTINCT mcc.[name]                                  AS [Name],
+                mcc.[type]                                  AS [Type],
+                mcc.[single_pages_kb]                       AS [SinglePagesKB],
+                mcc.[multi_pages_kb]                        AS [MultiPagesKB],
+                COALESCE(mcc.single_pages_in_use_kb, 0)     AS [SinglePagesInUseKB],
+                COALESCE(mcc.multi_pages_in_use_kb, 0)      AS [MultiPagesInUseKB],
+                mcc.entries_count                           AS [Entries],
+                mcc.entries_in_use_count                    AS [EntriesInUse],
+                mcch.removed_all_rounds_count               AS [RemovedAllRounds],
+                mcch.removed_last_round_count               AS [RemovedLastRound]
+FROM   sys.dm_os_memory_cache_counters mcc
+JOIN sys.dm_os_memory_cache_clock_hands mcch
+       ON mcc.cache_address = mcch.cache_address]]></query>
+  <query description="Performance - Components that consume the most memory"><![CDATA[---------------------------------------------------
+-- Components that consume the most memory
+---------------------------------------------------
+SELECT [type]                   AS [Type],
+       SUM(multi_pages_kb)      AS [MultiPagesKB]
+FROM   sys.dm_os_memory_clerks
+WHERE  multi_pages_kb != 0
+GROUP  BY type
+ORDER  BY SUM(multi_pages_kb) DESC]]></query>
+  <query description="Performance - Index Usage"><![CDATA[---------------------------------------------------
+-- Index Usage
+---------------------------------------------------
+SELECT DISTINCT SCHEMA_NAME(t.schema_id)          AS [Schema],
+                CAST(t.name AS NVARCHAR(128))     AS [Table],
+                CAST(i.name AS NVARCHAR(128))     AS [Index],
+                ius.user_seeks + ius.user_scans
+                + ius.user_lookups                AS [Reads],
+                ius.user_updates                  AS [Writes]
+FROM   sys.indexes i
+       JOIN sys.tables t
+         ON t.object_id = i.object_id
+       JOIN sys.dm_db_index_usage_stats ius
+         ON ius.object_id = i.object_id
+            AND i.index_id = ius.index_id
+WHERE  t.[type] = 'U'
+       AND i.[type] = 2]]></query>
+  <query description="Performance - Main consumers of buffer pool pages"><![CDATA[---------------------------------------------------
+-- Main consumers of buffer pool pages
+---------------------------------------------------
+SELECT [type]                   AS [Type],
+       SUM(single_pages_kb)     AS [Single Pages],
+       SUM(multi_pages_kb)      AS [Multi Pages]
+FROM   sys.dm_os_memory_clerks
+GROUP  BY [type]]]></query>
+  <query description="Performance - Missing Indexes"><![CDATA[---------------------------------------------------
+-- Missing Indexes
+---------------------------------------------------
+SELECT TOP 50 SCHEMA_NAME(t.schema_id)                              AS [Schema],
+              OBJECT_NAME(dm_mid.object_id, dm_mid.database_id)     AS [TableName],
+              dm_migs.avg_user_impact * ( dm_migs.user_seeks 
+                                          + dm_migs.user_scans )    AS [AvgEstimatedImpact],
+              dm_migs.last_user_seek                                AS [LastUserSeek],
+              dm_mid.equality_columns                               AS [EqualityColumns],
+              dm_mid.inequality_columns                             AS [InequalityColumns],
+              dm_mid.included_columns                               AS [IncludedColumns],
+              'CREATE INDEX [IX_'
+              + OBJECT_NAME(dm_mid.object_id, dm_mid.database_id)
+              + '_'
+              + REPLACE(REPLACE(REPLACE(ISNULL(dm_mid.equality_columns, ''), ', ', '_'), '[', ''), ']', '')
+              + CASE WHEN dm_mid.equality_columns IS NOT NULL AND dm_mid.inequality_columns 
+                IS NOT NULL THEN '_' ELSE '' END
+              + REPLACE(REPLACE(REPLACE(ISNULL(dm_mid.inequality_columns, ''), ', ', '_'), '[', ''), ']', '')
+              + ']' + ' ON ' + dm_mid.statement + ' ('
+              + ISNULL (dm_mid.equality_columns, '') + 
+                CASE WHEN dm_mid.equality_columns IS NOT NULL AND dm_mid.inequality_columns
+              IS NOT NULL
+              THEN ',' ELSE '' END
+              + ISNULL (dm_mid.inequality_columns, '') + ')'
+              + ISNULL (' INCLUDE (' + dm_mid.included_columns + ')', '')    AS [CreateStatement]
+FROM   sys.dm_db_missing_index_groups dm_mig
+       INNER JOIN sys.dm_db_missing_index_group_stats dm_migs
+               ON dm_migs.group_handle = dm_mig.index_group_handle
+       INNER JOIN sys.dm_db_missing_index_details dm_mid
+               ON dm_mig.index_handle = dm_mid.index_handle
+       JOIN sys.tables t
+         ON dm_mid.object_id = t.object_id
+       JOIN sys.databases d
+         ON d.database_id = dm_mid.database_id
+WHERE  dm_mid.database_id = DB_ID()
+ORDER  BY [AvgEstimatedImpact] DESC]]></query>
+  <query description="Performance - Procedures memory consumption/execution"><![CDATA[---------------------------------------------------
+-- Procedures memory consumption/execution
+---------------------------------------------------
+SELECT TOP 20 DB_NAME(qt.dbid)                                   AS [DatabaseName],           
+              OBJECT_SCHEMA_NAME(qt.objectid, dbid) + '.'                     
+               + OBJECT_NAME(qt.objectid, qt.dbid)               AS [ObjectName],                        
+              SUM(qs.total_physical_reads)                       AS [DiskReads],             
+              SUM(qs.total_logical_reads)                        AS [MemoryReads],           
+              SUM(qs.execution_count)                            AS [Executions],            
+              SUM(( qs.total_physical_reads                             
+               + qs.total_logical_reads ) / qs.execution_count)  AS [IO_Per_Execution],                      
+              SUM(qs.total_worker_time)                          AS [CPUTime],               
+              SUM(qs.total_elapsed_time)                         AS [DiskWaitAndCPUTime],    
+              SUM(qs.max_logical_writes)                         AS [MemoryWrites],          
+              MAX(qs.last_execution_time)                        AS [DateLastExecuted]      
+FROM   sys.dm_exec_query_stats AS qs
+       CROSS apply sys.DM_EXEC_SQL_TEXT(qs.sql_handle) AS qt
+GROUP  BY DB_NAME(qt.dbid),
+          OBJECT_SCHEMA_NAME(qt.objectid, dbid) + '.'
+          + OBJECT_NAME(qt.objectid, qt.dbid)
+ORDER  BY [IO_Per_Execution] DESC]]></query>
+  <query description="Performance - Procedures memory consumption total"><![CDATA[---------------------------------------------------
+-- Procedures memory consumption total
+---------------------------------------------------
+SELECT TOP 20 DB_NAME(qt.dbid)                                   AS [DatabaseName],       
+              OBJECT_SCHEMA_NAME(qt.objectid, dbid) + '.'                 
+                + OBJECT_NAME(qt.objectid, qt.dbid)              AS [ObjectName],                   
+              SUM(qs.total_physical_reads)                       AS [DiskReads],          
+              SUM(qs.total_logical_reads)                        AS [MemoryReads],        
+              SUM(qs.total_physical_reads                            
+                + qs.total_logical_reads)                        AS [Total_IO_Reads],                    
+              SUM(qs.execution_count)                            AS [Executions],         
+              SUM(( qs.total_physical_reads                         
+                + qs.total_logical_reads ) / qs.execution_count) AS [IO_Per_Execution],                   
+              SUM(qs.total_worker_time)                          AS [CPUTime],            
+              SUM(qs.total_elapsed_time)                         AS [DiskWaitAndCPUTime], 
+              SUM(qs.max_logical_writes)                         AS [MemoryWrites],       
+              MAX(qs.last_execution_time)                        AS [DateLastExecuted]  
+FROM   sys.dm_exec_query_stats AS qs
+       CROSS apply sys.DM_EXEC_SQL_TEXT(qs.sql_handle) AS qt
+GROUP  BY DB_NAME(qt.dbid),
+          OBJECT_SCHEMA_NAME(qt.objectid, dbid) + '.'
+          + OBJECT_NAME(qt.objectid, qt.dbid)
+ORDER  BY [Total_IO_Reads] DESC]]></query>
+  <query description="Performance - Queries with the most CPU overall"><![CDATA[---------------------------------------------------
+-- Queries with the most CPU overall
+---------------------------------------------------
+SELECT TOP 20 ISNULL(OBJECT_SCHEMA_NAME(qt.objectid, dbid) + '.'
+                     + OBJECT_NAME(qt.objectid, qt.dbid), 
+                     'Adhoc query')                                 AS [ObjectName],
+              qs.total_physical_reads                               AS [DiskReads],
+              qs.total_logical_reads                                AS [MemoryReads],
+              qs.execution_count                                    AS [Executions],
+              qs.total_worker_time                                  AS [TotalCPUTime],
+              qs.total_worker_time / qs.execution_count             AS [AverageCPUTime],
+              qs.total_elapsed_time                                 AS [DiskWaitAndCPUTime],
+              qs.max_logical_writes                                 AS [MemoryWrites],
+              qs.creation_time                                      AS [DateCached],
+              DB_NAME(qt.dbid)                                      AS [DatabaseName],
+              qs.last_execution_time                                AS [LastExecutionTime],
+              SUBSTRING(qt.text, statement_start_offset / 2 + 1, 
+              ( CASE
+                  WHEN statement_end_offset = -1 THEN LEN(
+                  CONVERT(NVARCHAR(max), text)) * 2
+                  ELSE statement_end_offset
+                END - statement_start_offset ) / 2)                 AS [TextData]
+FROM   sys.dm_exec_query_stats AS qs
+CROSS APPLY sys.DM_EXEC_SQL_TEXT(qs.sql_handle) AS qt
+ORDER  BY qs.total_worker_time DESC]]></query>
+  <query description="Performance - Unused Indexes"><![CDATA[---------------------------------------------------
+-- Unused Indexes
+---------------------------------------------------
+SELECT SCHEMA_NAME(t.schema_id)          AS [Schema],
+       OBJECT_NAME(i.object_id)          AS [Table],
+       CAST(i.name AS NVARCHAR(128))     AS [Index]
+FROM   sys.indexes i
+       JOIN sys.objects o
+         ON i.object_id = o.object_id
+       JOIN sys.tables t
+         ON i.object_id = t.object_id
+WHERE  OBJECTPROPERTY(o.object_id, 'IsUserTable') = 1
+       AND i.index_id NOT IN (SELECT S.index_id
+                              FROM   sys.dm_db_index_usage_stats s
+                              WHERE  s.object_id = i.object_id
+                                     AND i.index_id = s.index_id)
+       AND i.type_desc = 'NONCLUSTERED'
+ORDER  BY [table],
+          [index] ASC]]></query>
+  <query description="Schema - Changed in the last 90 days"><![CDATA[---------------------------------------------------
+-- Changed in the last 90 days
+---------------------------------------------------
+SELECT CAST(O.[name] AS NVARCHAR(128))         AS [Object],
+       CASE O.[type]
+         WHEN 'P' THEN 'StoredProc'
+         WHEN 'FN' THEN 'Function'
+         WHEN 'U' THEN 'Table'
+         WHEN 'V' THEN 'View'
+         WHEN 'TR' THEN 'Trigger'
+       END                                     AS [Type],
+       CASE
+         WHEN O.[create_date] = O.[modify_date] THEN 'created'
+         ELSE 'modified'
+       END                                     AS [Action],
+       CONVERT(DATETIME, O.[create_date], 121) AS [Created],
+       CONVERT(DATETIME, O.[modify_date], 121) AS [Modified]
+FROM   sys.objects O
+WHERE  O.[type] IN ( 'P', 'U', 'FN', 'V', 'TR' )
+       AND O.[modify_date] > DATEADD(day, -90, GETDATE())
+ORDER  BY O.[modify_date] DESC]]></query>
+  <query description="Schema - Database Names and Sizes"><![CDATA[---------------------------------------------------
+-- Database Names and Sizes
+---------------------------------------------------
+SELECT DB_NAME(database_id)            AS [DatabaseName],
+       CAST(name AS NVARCHAR(100))     AS [Logical_Name],
+       physical_name                   AS [PhysicalName],
+       ( ( size * 8 ) / 1024 )         AS [Size_MB]
+FROM   sys.master_files
+WHERE  database_id > 4]]></query>
+  <query description="Schema - Find Identity Fields"><![CDATA[---------------------------------------------------
+-- Find Identity Fields
+---------------------------------------------------
+SELECT CAST([Table].table_schema AS NVARCHAR(128))        AS [Schema],
+       CAST([Table].table_name AS NVARCHAR(128))          AS [TableName],
+       CAST([Column].column_name AS NVARCHAR(128))        AS [Column],
+       [Column].data_type                                 AS [Type],
+       CAST(IDENT_SEED([Table].table_name) AS INT)        AS [Seed],
+       CAST(IDENT_INCR([Table].table_name) AS INT)        AS [Increment],
+       CAST(IDENT_CURRENT([Table].table_name) AS INT)     AS [CurrentIdentity]
+FROM   information_schema.columns AS [Column]
+       INNER JOIN information_schema.tables AS [Table]
+               ON [Table].table_name = [Column].table_name
+WHERE  COLUMNPROPERTY(OBJECT_ID([Column].table_name), [Column].column_name, 'IsIdentity') = 1
+       AND table_type = 'BASE TABLE'
+       AND OBJECTPROPERTY(OBJECT_ID([Table].table_schema + '.'
+                                    + [Table].table_name), 'TableHasIdentity') = 1]]></query>
+  <query description="Schema - Find Non-Clustered Indexes"><![CDATA[---------------------------------------------------
+-- Find Non-Clustered Indexes
+---------------------------------------------------
+SELECT SCHEMA_NAME(t.schema_id)            AS [Schema],
+       CAST(t.name AS NVARCHAR(128))       AS [Table],
+       CAST(ind.name AS NVARCHAR(128))     AS [Index],
+       CAST(col.name AS NVARCHAR(128))     AS [Column],
+       CASE ind.is_unique
+         WHEN 0 THEN 'No'
+         ELSE 'Yes'
+       END                                 AS [IsUnique]
+FROM   sys.indexes ind
+       JOIN sys.tables t
+         ON ind.object_id = t.object_id
+       JOIN sys.index_columns ic
+         ON ind.object_id = ic.object_id
+            AND ind.index_id = ic.index_id
+       JOIN sys.columns col
+         ON ic.object_id = col.object_id
+            AND ic.column_id = col.column_id
+WHERE  ind.type_desc = 'NONCLUSTERED'
+       AND ind.is_primary_key = 0
+       AND ind.is_unique_constraint = 0
+       AND t.is_ms_shipped = 0
+ORDER  BY t.name,
+          ind.name,
+          col.name]]></query>
+  <query description="Schema - Find Primary Keys"><![CDATA[---------------------------------------------------
+-- Find Primary Keys
+---------------------------------------------------
+SELECT A.table_schema                          AS [Schema],
+       CAST(A.table_name AS NVARCHAR(128))     AS [Table],
+       B.column_name                           AS [Column],
+       A.constraint_name                       AS [PrimaryKey]
+FROM   information_schema.table_constraints A,
+       information_schema.constraint_column_usage B
+WHERE  constraint_type = 'PRIMARY KEY'
+       AND A.constraint_name = B.constraint_name
+ORDER  BY [table]]]></query>
+  <query description="Schema - Find Triggers"><![CDATA[---------------------------------------------------
+-- Find Triggers
+---------------------------------------------------
+SELECT CAST(sysobjects.name AS NVARCHAR(128))       AS [TriggerName],
+       USER_NAME(sysobjects.uid)                    AS [TriggerOwner],
+       CAST(s.name AS NVARCHAR(128))                AS [TableSchema],
+       OBJECT_NAME(parent_obj)                      AS [TableName],
+       OBJECTPROPERTY(id, 'ExecIsUpdateTrigger')    AS [isUpdate],
+       OBJECTPROPERTY(id, 'ExecIsDeleteTrigger')    AS [isDelete],
+       OBJECTPROPERTY(id, 'ExecIsInsertTrigger')    AS [isInsert],
+       OBJECTPROPERTY(id, 'ExecIsAfterTrigger')     AS [isAfter],
+       OBJECTPROPERTY(id, 'ExecIsInsteadOfTrigger') AS [isInsteadOf],
+       OBJECTPROPERTY(id, 'ExecIsTriggerDisabled')  AS [Disabled]
+FROM   sysobjects
+       INNER JOIN sysusers
+               ON sysobjects.uid = sysusers.uid
+       INNER JOIN sys.tables t
+               ON sysobjects.parent_obj = t.object_id
+       INNER JOIN sys.schemas s
+               ON t.schema_id = s.schema_id
+WHERE  sysobjects.type = 'TR']]></query>
+  <query description="Schema - Table Row Counts"><![CDATA[---------------------------------------------------
+-- Table Row Counts
+---------------------------------------------------
+SELECT o.name         AS [Table],
+       ddps.row_count AS [RowCount]
+FROM   sys.indexes i
+INNER JOIN sys.objects AS o
+   ON i.object_id = o.object_id
+INNER JOIN sys.dm_db_partition_stats AS ddps
+   ON i.object_id = ddps.object_id
+       AND i.index_id = ddps.index_id
+WHERE  i.index_id < 2
+       AND o.is_ms_shipped = 0
+       AND OBJECTPROPERTY(i.object_id, 'IsUserTable') = 1
+ORDER  BY ddps.row_count DESC]]></query>
+  <query description="Schema - Table Space Sizes."><![CDATA[---------------------------------------------------
+-- Table Space Sizes.
+---------------------------------------------------
+CREATE TABLE #t
+  (
+     [tablename]   NVARCHAR(128),
+     [rowcount]    CHAR(11),
+     [reserved]    VARCHAR(18),
+     [datasize]    VARCHAR(18),
+     [indexsize]   VARCHAR(18),
+     [unusedspace] VARCHAR(18)
+  )
+
+INSERT #t
+EXEC SP_MSFOREACHTABLE 'EXEC sp_spaceused ''?'''
+
+SELECT [tablename],  
+       [rowcount],   
+       [reserved],   
+       [datasize],   
+       [indexsize],
+       [unusedspace]
+FROM   #t]]></query>
+  <query description="Schema - Tables with no Primary Key or Clustered Index"><![CDATA[---------------------------------------------------
+-- Tables with no Primary Key or Clustered Index
+---------------------------------------------------
+SELECT DISTINCT SCHEMA_NAME(t.schema_id)   AS [Schema],
+                OBJECT_NAME(i.object_id)   AS [Table],
+                p.[rows]                   AS [RowCount]
+FROM   sys.indexes i
+       JOIN sys.partitions p
+         ON p.index_id = i.index_id
+            AND i.object_id = p.object_id
+       JOIN sys.tables t
+         ON i.object_id = t.object_id
+WHERE  i.index_id = 0
+       AND OBJECTPROPERTY(i.object_id, 'IsUserTable') = 1]]></query>
+  <query description="Maintenance - Backup all SQL Server databases"><![CDATA[---------------------------------------------------
+-- Backup all SQL Server databases
+---------------------------------------------------
+DECLARE @name VARCHAR(50) -- database name  
+DECLARE @path VARCHAR(256) -- path for backup files  
+DECLARE @fileName VARCHAR(256) -- filename for backup  
+DECLARE @fileDate VARCHAR(20) -- used for file name
+ 
+-- specify database backup directory
+SET @path = 'C:\Backup\'  
+ 
+-- specify filename format
+SELECT @fileDate = CONVERT(VARCHAR(20),GETDATE(),112) 
+ 
+DECLARE db_cursor CURSOR FOR  
+SELECT name 
+FROM master.dbo.sysdatabases 
+WHERE name NOT IN ('master','model','msdb','tempdb')  -- exclude these databases
+ 
+OPEN db_cursor   
+FETCH NEXT FROM db_cursor INTO @name   
+ 
+WHILE @@FETCH_STATUS = 0   
+BEGIN   
+       SET @fileName = @path + @name + '_' + @fileDate + '.BAK'  
+       BACKUP DATABASE @name TO DISK = @fileName  
+ 
+       FETCH NEXT FROM db_cursor INTO @name   
+END   
+ 
+CLOSE db_cursor   
+DEALLOCATE db_cursor]]></query>
+  <query description="Performance - Index Fragmantation"><![CDATA[---------------------------------------------------
+-- Index Fragmantation
+---------------------------------------------------
+SELECT SCHEMA_NAME(o.schema_id)                                 AS [SchemaName],
+       OBJECT_NAME(o.object_id)                                 AS [TableName],
+       i.name                                                   AS [IndexName],
+       i.type_desc                                              AS [IndexType],
+       CASE
+         WHEN ISNULL(ps.function_id, 1) = 1 THEN 'NO'
+         ELSE 'YES'
+       END                                                      AS [Partitioned],
+       COALESCE(fg.name, fgp.name)                              AS [FileGroup],
+       p.partition_number                                       AS [PartitionNo],
+       p.rows                                                   AS [PartitionRows],
+       CAST(dmv.avg_fragmentation_in_percent AS DECIMAL(16, 2)) AS [AvgFrag%],
+       dmv.fragment_count                                       AS [FragCount],
+       CAST(dmv.avg_fragment_size_in_pages AS DECIMAL(16, 2))   AS [AvgFragInPages],
+       dmv.page_count                                           AS [PageCount]
+FROM   sys.partitions AS p WITH (nolock)
+       INNER JOIN sys.indexes AS i WITH (nolock)
+               ON i.object_id = p.object_id
+                  AND i.index_id = p.index_id
+       INNER JOIN sys.objects AS o WITH (nolock)
+               ON o.object_id = i.object_id
+       INNER JOIN sys.DM_DB_INDEX_PHYSICAL_STATS (DB_ID(), NULL, NULL, NULL, N'LIMITED') dmv
+               ON dmv.object_id = i.object_id
+                  AND dmv.index_id = i.index_id
+                  AND dmv.partition_number = p.partition_number
+       LEFT JOIN sys.data_spaces AS ds WITH (nolock)
+              ON ds.data_space_id = i.data_space_id
+       LEFT JOIN sys.partition_schemes AS ps WITH (nolock)
+              ON ps.data_space_id = ds.data_space_id
+       LEFT JOIN sys.partition_functions AS pf WITH (nolock)
+              ON pf.function_id = ps.function_id
+       LEFT JOIN sys.destination_data_spaces AS dds WITH (nolock)
+              ON dds.partition_scheme_id = ps.data_space_id
+                 AND dds.destination_id = p.partition_number
+       LEFT JOIN sys.filegroups AS fg WITH (nolock)
+              ON fg.data_space_id = i.data_space_id
+       LEFT JOIN sys.filegroups AS fgp WITH (nolock)
+              ON fgp.data_space_id = dds.data_space_id
+WHERE  OBJECTPROPERTY(p.object_id, 'ISMSShipped') = 0
+       AND i.type_desc != 'HEAP'
+       AND dmv.avg_fragmentation_in_percent > 1
+ORDER  BY [avgfrag%] DESC,
+          schemaname,
+          tablename,
+          indexname,
+          partitionno
+
+
+]]></query>
+  <query description="Schema - List All Database Objects"><![CDATA[---------------------------------------------------
+-- List all Database Objects
+---------------------------------------------------
+CREATE TABLE #ObjTypes ([oType] NVARCHAR(2),[oName] NVARCHAR(50))
+
+INSERT INTO #ObjTypes VALUES( 'AF', 'Aggregate function (CLR)')
+INSERT INTO #ObjTypes VALUES( 'C ', 'CHECK constraint')
+INSERT INTO #ObjTypes VALUES( 'D ', 'DEFAULT (constraint or stand-alone)')
+INSERT INTO #ObjTypes VALUES( 'F ', 'FOREIGN KEY constraint')
+INSERT INTO #ObjTypes VALUES( 'FN', 'SQL scalar function')
+INSERT INTO #ObjTypes VALUES( 'FS', 'Assembly (CLR) scalar-function')
+INSERT INTO #ObjTypes VALUES( 'FT', 'Assembly (CLR) table-valued function')
+INSERT INTO #ObjTypes VALUES( 'IF', 'SQL inline table-valued function')
+INSERT INTO #ObjTypes VALUES( 'IT', 'Internal table')
+INSERT INTO #ObjTypes VALUES( 'P ', 'SQL Stored Procedure')
+INSERT INTO #ObjTypes VALUES( 'PC', 'Assembly (CLR) stored-procedure')
+INSERT INTO #ObjTypes VALUES( 'PG', 'Plan guide')
+INSERT INTO #ObjTypes VALUES( 'PK', 'PRIMARY KEY constraint')
+INSERT INTO #ObjTypes VALUES( 'R ', 'Rule (old-style, stand-alone)')
+INSERT INTO #ObjTypes VALUES( 'RF', 'Replication-filter-procedure')
+INSERT INTO #ObjTypes VALUES( 'S ', 'System base table')
+INSERT INTO #ObjTypes VALUES( 'SN', 'Synonym')
+INSERT INTO #ObjTypes VALUES( 'SQ', 'Service queue')
+INSERT INTO #ObjTypes VALUES( 'TA', 'Assembly (CLR) DML trigger')
+INSERT INTO #ObjTypes VALUES( 'TF', 'SQL table-valued-function')
+INSERT INTO #ObjTypes VALUES( 'TR', 'SQL DML trigger')
+INSERT INTO #ObjTypes VALUES( 'TT', 'Table type')
+INSERT INTO #ObjTypes VALUES( 'U ', 'Table (user-defined)')
+INSERT INTO #ObjTypes VALUES( 'UQ', 'UNIQUE constraint')
+INSERT INTO #ObjTypes VALUES( 'V ', 'View')
+INSERT INTO #ObjTypes VALUES( 'X ', 'Extended stored procedure')
+
+SELECT 
+        s.[Name]                                    AS [ObjectSchema], 
+        CAST(o.[Name] AS NVARCHAR(128))             AS [ObjectName],
+        t.[oName]                                   AS [ObjectType],
+        ISNULL(OBJECT_NAME(o.parent_object_id),'')  AS [ParentObject],
+        CONVERT(DATETIME, o.[create_date], 121)     AS [Created],
+        CONVERT(DATETIME, o.[modify_date], 121)     AS [LastModified]
+FROM   sys.objects o WITH(NOLOCK)
+INNER JOIN sys.schemas s WITH(NOLOCK)
+      ON o.schema_id = s.schema_id
+INNER JOIN #ObjTypes t
+      ON o.[Type]  COLLATE DATABASE_DEFAULT
+         = [oType] COLLATE DATABASE_DEFAULT
+WHERE  o.is_ms_shipped = 0
+ORDER BY [ObjectSchema],[ObjectName]
+
+DROP TABLE #ObjTypes
+]]></query>
+  <query description="Security - Find Object Permissions for all Users"><![CDATA[---------------------------------------------------
+-- Find Object Permissions for all Users
+---------------------------------------------------
+-- Security Audit Report                                                                                                      
+-- 1) List all access provisioned to a sql user or windows user/group directly 
+-- 2) List all access provisioned to a sql user or windows user/group through a database or application role
+-- 3) List all access provisioned to the public role
+  
+-- Columns Returned:
+-- UserName        : SQL or Windows/Active Directory user cccount.  This could also be an Active Directory group.
+-- UserType        : Value will be either 'SQL User' or 'Windows User'.  This reflects the type of user defined for the 
+--                   SQL Server user account.
+-- DatabaseUserName: Name of the associated user as defined in the database user account.  
+--                   The database user may not be the same as the server user.
+-- Role            : The role name.  This will be null if the associated permissions to the object are defined at directly
+--                   on the user account, otherwise this will be the name of the role that the user is a member of.
+-- PermissionType  : Type of permissions the user/role has on an object. Examples could include CONNECT, EXECUTE, SELECT
+--                   DELETE, INSERT, ALTER, CONTROL, TAKE OWNERSHIP, VIEW DEFINITION, etc.
+--                    This value may not be populated for all roles.  Some built in roles have implicit permission
+--                   definitions.
+-- PermissionState : Reflects the state of the permission type, examples could include GRANT, DENY, etc.
+--                   This value may not be populated for all roles.  Some built in roles have implicit permission
+--                   definitions.
+-- ObjectType      : Type of object the user/role is assigned permissions on.  Examples could include USER_TABLE, 
+--                   SQL_SCALAR_FUNCTION, SQL_INLINE_TABLE_VALUED_FUNCTION, SQL_STORED_PROCEDURE, VIEW, etc.   
+--                   This value may not be populated for all roles.  Some built in roles have implicit permission
+--                   definitions.          
+-- ObjectName      : Name of the object that the user/role is assigned permissions on.  
+--                   This value may not be populated for all roles.  Some built in roles have implicit permission
+--                   definitions.
+-- ColumnName      : Name of the column of the object that the user/role is assigned permissions on. This value
+--                   is only populated if the object is a table, view or a table value function.                 
+---------------------------------------------------
+
+--List all access provisioned to a sql user or windows user/group directly 
+SELECT  
+    [UserName] = CASE princ.[type] 
+                    WHEN 'S' THEN princ.[name]
+                    WHEN 'U' THEN ulogin.[name] COLLATE Latin1_General_CI_AI
+                 END,
+    [UserType] = CASE princ.[type]
+                    WHEN 'S' THEN 'SQL User'
+                    WHEN 'U' THEN 'Windows User'
+                 END,  
+    [DatabaseUserName] = princ.[name],       
+    [Role] = null,      
+    [PermissionType] = perm.[permission_name],       
+    [PermissionState] = perm.[state_desc],       
+    [ObjectType] = obj.type_desc,--perm.[class_desc],       
+    [ObjectName] = OBJECT_NAME(perm.major_id),
+    [ColumnName] = col.[name]
+FROM    
+    --database user
+    sys.database_principals princ  
+LEFT JOIN
+    --Login accounts
+    sys.login_token ulogin on princ.[sid] = ulogin.[sid]
+LEFT JOIN        
+    --Permissions
+    sys.database_permissions perm ON perm.[grantee_principal_id] = princ.[principal_id]
+LEFT JOIN
+    --Table columns
+    sys.columns col ON col.[object_id] = perm.major_id 
+                    AND col.[column_id] = perm.[minor_id]
+LEFT JOIN
+    sys.objects obj ON perm.[major_id] = obj.[object_id]
+WHERE 
+    princ.[type] in ('S','U')
+UNION
+--List all access provisioned to a sql user or windows user/group through a database or application role
+SELECT  
+    [UserName] = CASE memberprinc.[type] 
+                    WHEN 'S' THEN memberprinc.[name]
+                    WHEN 'U' THEN ulogin.[name] COLLATE Latin1_General_CI_AI
+                 END,
+    [UserType] = CASE memberprinc.[type]
+                    WHEN 'S' THEN 'SQL User'
+                    WHEN 'U' THEN 'Windows User'
+                 END, 
+    [DatabaseUserName] = memberprinc.[name],   
+    [Role] = roleprinc.[name],      
+    [PermissionType] = perm.[permission_name],       
+    [PermissionState] = perm.[state_desc],       
+    [ObjectType] = obj.type_desc,--perm.[class_desc],   
+    [ObjectName] = OBJECT_NAME(perm.major_id),
+    [ColumnName] = col.[name]
+FROM    
+    --Role/member associations
+    sys.database_role_members members
+JOIN
+    --Roles
+    sys.database_principals roleprinc ON roleprinc.[principal_id] = members.[role_principal_id]
+JOIN
+    --Role members (database users)
+    sys.database_principals memberprinc ON memberprinc.[principal_id] = members.[member_principal_id]
+LEFT JOIN
+    --Login accounts
+    sys.login_token ulogin on memberprinc.[sid] = ulogin.[sid]
+LEFT JOIN        
+    --Permissions
+    sys.database_permissions perm ON perm.[grantee_principal_id] = roleprinc.[principal_id]
+LEFT JOIN
+    --Table columns
+    sys.columns col on col.[object_id] = perm.major_id 
+                    AND col.[column_id] = perm.[minor_id]
+LEFT JOIN
+    sys.objects obj ON perm.[major_id] = obj.[object_id]
+UNION
+--List all access provisioned to the public role, which everyone gets by default
+SELECT  
+    [UserName] = 'All Users',
+    [UserType] = 'All Users',
+    [DatabaseUserName] = 'All Users',       
+    [Role] = roleprinc.[name],      
+    [PermissionType] = perm.[permission_name],       
+    [PermissionState] = perm.[state_desc],       
+    [ObjectType] = obj.type_desc,--perm.[class_desc],  
+    [ObjectName] = OBJECT_NAME(perm.major_id),
+    [ColumnName] = col.[name]
+FROM    
+    --Roles
+    sys.database_principals roleprinc
+LEFT JOIN        
+    --Role permissions
+    sys.database_permissions perm ON perm.[grantee_principal_id] = roleprinc.[principal_id]
+LEFT JOIN
+    --Table columns
+    sys.columns col on col.[object_id] = perm.major_id 
+                    AND col.[column_id] = perm.[minor_id]                   
+JOIN 
+    --All objects   
+    sys.objects obj ON obj.[object_id] = perm.[major_id]
+WHERE
+    --Only roles
+    roleprinc.[type] = 'R' AND
+    --Only public role
+    roleprinc.[name] = 'public' AND
+    --Only objects of ours, not the MS objects
+    obj.is_ms_shipped = 0
+ORDER BY
+    princ.[Name],
+    OBJECT_NAME(perm.major_id),
+    col.[name],
+    perm.[permission_name],
+    perm.[state_desc],
+    obj.type_desc--perm.[class_desc] ]]></query>
+  <query description="Security - List Table Permissions for a User"><![CDATA[---------------------------------------------------
+-- List table permissions for a given user:
+---------------------------------------------------
+SELECT 
+  USER_NAME(p.[grantee_principal_id])   AS [UserName],
+  o.[name]                              AS [TableName],
+  CONVERT(varchar(10), CASE p.type
+        WHEN 'RF' THEN 'REFERENCES'
+        WHEN 'SL' THEN 'SELECT'
+        WHEN 'IN' THEN 'INSERT'
+        WHEN 'DL' THEN 'DELETE'
+        WHEN 'UP' THEN 'UPDATE'
+        END)                            AS [PrivilegeType]
+FROM 
+sys.database_permissions p,
+sys.objects o
+WHERE 
+o.[type] in ('U', 'V') AND
+p.[major_id] = o.[object_id] AND
+p.[minor_id] = 0
+
+-- AND USER_NAME(p.[grantee_principal_id]) = 'MyUserName']]></query>
+  <query description="Schema - Find Foriegn Keys"><![CDATA[---------------------------------------------------
+-- Find Foreign Keys
+---------------------------------------------------
+SELECT SCHEMA_NAME(f.schema_id)                                   AS [Schema],
+       OBJECT_NAME(f.parent_object_id)                            AS [Table],
+       COL_NAME(fc.parent_object_id, fc.parent_column_id)         AS [Column],
+       CAST(f.name AS NVARCHAR(128))                              AS [ForeignKey],
+       OBJECT_NAME (f.referenced_object_id)                       AS [ReferenceTable],
+       COL_NAME(fc.referenced_object_id, fc.referenced_column_id) AS [ReferenceColumn],
+       CASE(IS_NOT_TRUSTED)
+          WHEN 0 THEN 'Yes'
+          ELSE 'No'
+       END                                                        AS [Trusted]
+FROM   sys.foreign_keys f
+INNER JOIN sys.foreign_key_columns fc
+       ON f.object_id = fc.constraint_object_id]]></query>
+  <query description="Maintenance - Backup Database with Exclusive Access"><![CDATA[---------------------------------------------------
+-- Backup Database with Exclusive Access
+---------------------------------------------------
+USE [MyDatabase]
+GO
+
+ALTER DATABASE [MyDatabase] SET SINGLE_USER WITH ROLLBACK IMMEDIATE  
+--ALTER DATABASE [MyDatabase] SET SINGLE_USER WITH ROLLBACK AFTER 30 
+--ALTER DATABASE [MyDatabase] SET SINGLE_USER WITH NO_WAIT 
+GO
+
+RESTORE DATABASE [MyDatabase] 
+    FROM DISK = 'c:\SqlBackups\MYBACKUP.BAK' 
+GO
+
+ALTER DATABASE [MyDatabase] SET MULTI_USER
+GO]]></query>
+  <query description="Development - Create C# Class from SQL Server Table/View"><![CDATA[---------------------------------------------------
+-- Create C# Class from SQL Server Table/View
+---------------------------------------------------
+-- Creates a class structure into the Messages 
+-- tab of Sql Server Management Studio
+---------------------------------------------------
+USE [MyDatabaseName]
+
+DECLARE @TableName [VARCHAR](50)
+
+SET @TableName = 'MyTableName'
+
+BEGIN try
+    SET nocount ON
+
+    -- Create table to convert SQL types to C# types
+    DECLARE @DbVsCSharpTypes TABLE
+      (
+         [dbvscsharptypesid]    [INT] NOT NULL,
+         [sqldatatype]          [VARCHAR](200) NULL,
+         [csharpdatatype]       [VARCHAR](200) NULL
+      )
+
+    INSERT INTO @DbVsCSharpTypes
+                ([dbvscsharptypesid],
+                 [sqldatatype],
+                 [csharpdatatype])
+    SELECT 1,N'bigint',N'long' UNION ALL
+    SELECT 2,N'binary',N'byte[]' UNION ALL
+    SELECT 3,N'bit',N'bool' UNION ALL
+    SELECT 4,N'char',N'char' UNION ALL
+    SELECT 5,N'cursor',NULL UNION ALL
+    SELECT 6,N'date',N'DateTime' UNION ALL
+    SELECT 7,N'datetime',N'DateTime' UNION ALL
+    SELECT 8,N'datetime2',N'DateTime' UNION ALL
+    SELECT 9,N'datetimeoffset',N'DateTimeOffset' UNION ALL
+    SELECT 10,N'decimal',N'decimal' UNION ALL
+    SELECT 11,N'float',N'double' UNION ALL
+    SELECT 12,N'geography',NULL UNION ALL
+    SELECT 13,N'geometry',NULL UNION ALL
+    SELECT 14,N'hierarchyid',NULL UNION ALL
+    SELECT 15,N'image',NULL UNION ALL
+    SELECT 16,N'int',N'int' UNION ALL
+    SELECT 17,N'money',N'decimal' UNION ALL
+    SELECT 18,N'nchar',N'string' UNION ALL
+    SELECT 19,N'ntext',NULL UNION ALL
+    SELECT 20,N'numeric',N'decimal' UNION ALL
+    SELECT 21,N'nvarchar',N'string' UNION ALL
+    SELECT 22,N'nvarchar(1), nchar(1)', N'string' UNION ALL
+    SELECT 23,N'real',N'single' UNION ALL
+    SELECT 24,N'rowversion',N'byte[]' UNION ALL
+    SELECT 25,N'smallint',N'short' UNION ALL
+    SELECT 26,N'smallmoney',N'decimal' UNION ALL
+    SELECT 27,N'sql_variant',N'object' UNION ALL
+    SELECT 28,N'table',NULL UNION ALL
+    SELECT 29,N'text',N'string' UNION ALL
+    SELECT 30,N'time',N'TimeSpan' UNION ALL
+    SELECT 31,N'timestamp',NULL UNION ALL
+    SELECT 32,N'tinyint',N'byte' UNION ALL
+    SELECT 33,N'uniqueidentifier',N'Guid' UNION ALL
+    SELECT 34,N'varbinary ',N'byte[]' UNION ALL
+    SELECT 35,N'varbinary(1), binary(1)',N'byte' UNION ALL
+    SELECT 36,N'varchar',N'string' UNION ALL
+    SELECT 37,N'xml',NULL
+
+	-- -----------------------------------------	 
+	DECLARE @DbName NVARCHAR(200 ) 
+	DECLARE @ClassCode NVARCHAR(MAX) 
+	DECLARE @CurrentRowPosition INT                                 
+	DECLARE @ColumnName NVARCHAR(200)
+	DECLARE @Count INT 
+	DECLARE @Properties NVARCHAR(MAX)
+	DECLARE @Constructor NVARCHAR(MAX)
+	DECLARE @ConstructorHeader NVARCHAR(MAX)
+	DECLARE @ConstructorComments NVARCHAR(MAX)
+	
+	SELECT @DbName = DB_NAME()               
+	SET @ClassCode = ''
+	SET @Properties = '' 
+	SET @ConstructorHeader = 'public ' + @TableName + '('
+	SET @Constructor = '' 
+	SET @ConstructorComments = CHAR(9) + CHAR(9) + '/// <summary>' + CHAR(13)
+	SET @ConstructorComments = @ConstructorComments + CHAR(9) + CHAR(9) + '/// Initializes a new instance of the <see cref="' + @TableName + '"/> class.' + CHAR(13)
+	SET @ConstructorComments = @ConstructorComments + CHAR(9) + CHAR(9) + '/// </summary>' + CHAR(13)
+
+	SET @ClassCode = @ClassCode +  '// ----------------------------------------------------------------------' + CHAR(13)
+	SET @ClassCode = @ClassCode +  '// <copyright file="' + @TableName + '.cs" company="Masonsoft Technology Ltd">' + CHAR(13)
+	SET @ClassCode = @ClassCode +  '//     Copyright. All right reserved' + CHAR(13)
+	SET @ClassCode = @ClassCode +  '// </copyright>' + CHAR(13)
+	SET @ClassCode = @ClassCode +  '// ------------------------------------------------------------------------' + CHAR(13)
+	SET @ClassCode = @ClassCode +  'namespace ' + @DbName + '.DataAccessLayer' + CHAR(13) + '\' + CHAR(13)
+	SET @ClassCode = @ClassCode + CHAR(9) + 'using System;' + CHAR(13) + CHAR(13)
+	SET @ClassCode = @ClassCode + CHAR(9) + '/// <summary>' + CHAR(13)
+	SET @ClassCode = @ClassCode + CHAR(9) + '/// Public Class ' + @TableName + CHAR(13)
+	SET @ClassCode = @ClassCode + CHAR(9) + '/// </summary>' + CHAR(13)
+	SET @ClassCode = @ClassCode + CHAR(9) +  'public class ' + @TableName + CHAR(13) + CHAR(9) +  '\ '
+	
+	--Create ColNames table                      
+	DECLARE @ColNames TABLE                          
+	(                                
+		Number INT IDENTITY(1,1),		--Auto incrementing Identity column                              
+		ColName NVARCHAR(300) ,			--The string value                        ,         
+		DataType NVARCHAR(50) ,			--the datatype                       
+		IS_NULLABLE NVARCHAR(5) ,		--should we add = null in front         
+		CHARACTER_MAXIMUM_LENGTH INT        
+	)
+	                                
+	INSERT INTO @ColNames         
+	SELECT column_name ,  Data_type , IS_NULLABLE , CHARACTER_MAXIMUM_LENGTH  
+	FROM INFORMATION_SCHEMA.COLUMNS                             
+	WHERE TABLE_NAME=@TableName                                
+
+	--Initialize the looper variable                                
+	SET @CurrentRowPosition = 1                                
+
+	--Determine the number of rows in the Table                                
+	SELECT @Count = MAX(Number) FROM @ColNames                                
+
+	--Variables to hold the currently selected value from the ColNames table                                
+	DECLARE @ColName					NVARCHAR(300);                                
+	DECLARE @DataType					NVARCHAR(50)                      
+	DECLARE @IS_NULLABLE				NVARCHAR(5)        
+	DECLARE @CHARACTER_MAXIMUM_LENGTH	INT        
+
+	--Loop through until all row processing is done              
+	WHILE @CurrentRowPosition <= @Count      
+	BEGIN 
+	                               
+		--Load current value from the Table                                
+		SELECT @ColName = ColName FROM @ColNames WHERE Number = @CurrentRowPosition        
+		SELECT @DataType = DataType FROM @ColNames WHERE Number = @CurrentRowPosition               
+		SELECT @IS_NULLABLE = IS_NULLABLE FROM @ColNames WHERE Number = @CurrentRowPosition                    
+		SELECT @CHARACTER_MAXIMUM_LENGTH = CHARACTER_MAXIMUM_LENGTH FROM @ColNames WHERE Number = @CurrentRowPosition                    
+		 
+		-- Get the C# type based on the data type
+		SET @DataType = (SELECT TOP 1 CSharpDataType FROM @DbVsCSharpTypes WHERE SqlDataType = LOWER(@DataType))
+
+		-- Generate the constructor
+		SET @ConstructorComments = @ConstructorComments + CHAR(9) + CHAR(9) + '/// <param name="' + LOWER(@ColName) + '">The ' + LOWER(@ColName) + ' parameter</param>'
+		IF @CurrentRowPosition != @Count
+			SET @ConstructorComments = @ConstructorComments + CHAR(13)
+
+		SET @ConstructorHeader = @ConstructorHeader + ISNULL(@DataType,'UNKNOWN_DATATYPE') + ' ' + LOWER(@ColName)
+		IF @CurrentRowPosition != @Count
+			SET @ConstructorHeader = @ConstructorHeader + ', '
+		ELSE
+			SET @ConstructorHeader = @ConstructorHeader + ') '
+			
+		SET @Constructor = @Constructor + CHAR(9) + CHAR(9) + CHAR(9) + 'this.' + @ColName + ' = ' + LOWER(@ColName) + ';'	
+		IF @CurrentRowPosition != @Count
+			SET @Constructor = @Constructor + CHAR(13)
+
+		-- Generate the public properties
+		IF @CurrentRowPosition != 1
+			SET @Properties = @Properties + CHAR(13)
+
+		IF @IS_NULLABLE = 'YES'    
+		BEGIN    
+			SET @Properties = @Properties + CHAR(13) + CHAR(9) + CHAR(9) + '/// <summary>' + CHAR(13)
+
+			IF @DataType = 'bool'
+				SET @Properties = @Properties + CHAR(9) + CHAR(9) + '/// Gets a value indicating whether the ' + LOWER(@ColName) + ' property is true or false' + CHAR(13)
+			ELSE
+				SET @Properties = @Properties + CHAR(9) + CHAR(9) + '/// Gets or sets the ' + LOWER(@ColName) + CHAR(13)
+			
+			SET @Properties = @Properties + CHAR(9) + CHAR(9) + '/// </summary>' + CHAR(13)
+			SET @Properties = @Properties + CHAR(9) + CHAR(9) + '/// <value>' + CHAR(13)
+			SET @Properties = @Properties + CHAR(9) + CHAR(9) + '/// The ' + LOWER(@ColName) + CHAR(13)
+			SET @Properties = @Properties + CHAR(9) + CHAR(9) + '/// </value>' + CHAR(13)
+			SET @Properties = @Properties + CHAR(9) + CHAR(9) + 'public ' + @DataType +  ' ' + @ColName + ' \ get; set; \ ' 
+		END
+		ELSE
+		BEGIN
+			SET @Properties = @Properties + CHAR(13) + CHAR(9) + CHAR(9) + '/// <summary>' + CHAR(13)
+			IF @DataType = 'bool'
+				SET @Properties = @Properties + CHAR(9) + CHAR(9) + '/// Gets a value indicating whether the ' + LOWER(@ColName) + ' property is true or false' + CHAR(13)
+			ELSE
+			SET @Properties = @Properties + CHAR(9) + CHAR(9) + '/// Gets or privately sets the ' + LOWER(@ColName) + CHAR(13)
+
+			SET @Properties = @Properties + CHAR(9) + CHAR(9) + '/// </summary>' + CHAR(13)
+			SET @Properties = @Properties + CHAR(9) + CHAR(9) + 'public ' + @DataType +  ' ' + @ColName + ' \ get; private set; \ ' 
+		END
+				 
+		SET @CurrentRowPosition = @CurrentRowPosition + 1;                                
+	END                       
+	        
+	-- Final printout
+	PRINT @ClassCode + CHAR(13) + CHAR(9) + CHAR(9) + '#region constructor' + CHAR(13)
+	PRINT @ConstructorComments
+	PRINT CHAR(9) + CHAR(9) + @ConstructorHeader
+	PRINT CHAR(9) + CHAR(9) + '\'
+	PRINT @Constructor
+	PRINT CHAR(9) + CHAR(9) + '\' + CHAR(13)
+	PRINT CHAR(9) + CHAR(9) + '#endregion' + CHAR(13)
+	PRINT CHAR(9) + CHAR(9) + '#region public properties'
+	PRINT @Properties
+	PRINT CHAR(13) + CHAR(9) + CHAR(9) + '#endregion'
+	PRINT CHAR(9) + '\ '
+	PRINT '\ '
+	
+	SELECT 'Cut and paste the code' AS [Go to Messages]
+
+END TRY                            
+BEGIN CATCH                                  
+	print ' Error number: ' + CAST(ERROR_NUMBER() AS varchar(100)) +                         
+	'Error message: ' + ERROR_MESSAGE() + 'Error severity: ' +           
+	CAST(ERROR_SEVERITY() AS varCHAR(9)) +                         
+	'Error state: ' + CAST(ERROR_STATE() AS varchar(100)) +           
+	'XACT_STATE: ' + CAST(XACT_STATE() AS varchar(100))                                  
+END CATCH  
+	                                
+ ]]></query>
+  <query description="Performance - Queries with the highest average CPU usage"><![CDATA[---------------------------------------------------
+-- Queries with the highest average CPU usage
+---------------------------------------------------
+SELECT TOP 20 ISNULL(OBJECT_SCHEMA_NAME(qt.objectid, dbid) + '.'
+                     + OBJECT_NAME(qt.objectid, qt.dbid), 'Adhoc query') AS [ObjectName],
+              SUBSTRING(qt.text, statement_start_offset / 2 + 1, 
+              ( CASE
+                  WHEN statement_end_offset = -1 THEN LEN(
+                  CONVERT(NVARCHAR(max), text)) * 2
+                  ELSE statement_end_offset
+                END - statement_start_offset ) / 2)                 AS [TextData],
+              qs.total_physical_reads                               AS [DiskReads],
+              qs.total_logical_reads                                AS [MemoryReads],
+              qs.execution_count                                    AS [Executions],
+              qs.total_worker_time                                  AS [TotalCPUTime],
+              qs.total_worker_time / qs.execution_count             AS [AverageCPUTime],
+              qs.total_elapsed_time                                 AS [DiskWaitAndCPUTime],
+              qs.max_logical_writes                                 AS [MemoryWrites],
+              qs.creation_time                                      AS [DateCached],
+              DB_NAME(qt.dbid)                                      AS [DatabaseName],
+              qs.last_execution_time                                AS [LastExecutionTime]
+FROM   sys.dm_exec_query_stats qs
+CROSS APPLY sys.DM_EXEC_SQL_TEXT(qs.sql_handle) qt
+ORDER  BY qs.total_worker_time / qs.execution_count DESC ]]></query>
+</queries>

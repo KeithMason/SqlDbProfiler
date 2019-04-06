@@ -1,0 +1,259 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<queries>
+  <query description="Global - Busiest Databases in this Server">
+    SELECT ISNULL(DB_NAME(dest.dbid),'Adhoc SQL') AS [DatabaseName],
+    SUM(deqs.total_logical_reads) As [TotalPageReads],
+    SUM(deqs.total_logical_writes) AS [TotalPageWrites],
+    SUM(deqs.execution_count) AS [ExecutionCount],
+    SUM(deqs.total_worker_time) AS [TotalWorkerTime],
+    MIN(deqs.min_worker_time) AS [MinWorkerTime],
+    MAX(deqs.max_worker_time) AS [MaxWorkerTime],
+    MAX(deqs.last_execution_time) AS [LastExecution]
+    FROM sys.dm_exec_query_stats deqs
+    CROSS APPLY sys.dm_exec_sql_text(deqs.sql_handle) AS dest
+    GROUP BY DB_NAME(dest.dbid)
+  </query>
+  <query description="Global - Aggregate Query Performance">
+    SELECT TOP 20
+    (qs.total_logical_reads/qs.execution_count) AS [AvgLogicalReads],
+    SUBSTRING(qt.text, statement_start_offset/2 + 1,
+    (CASE WHEN statement_end_offset = -1 THEN LEN(CONVERT(nvarchar(MAX),text)) * 2
+    ELSE statement_end_offset END - statement_start_offset)/2) AS [TextData],
+    (qs.total_logical_writes/qs.execution_count) AS [AvgLogicalWrites],
+    (qs.total_physical_reads/qs.execution_count) AS [AvgPhysReads],
+    (qs.total_worker_time/qs.execution_count) AS [AvgCpuOverhead],
+    qs.total_logical_reads AS [TotalLogicalReads],
+    qs.total_logical_writes AS [TotalLogcalWrites],
+    qs.total_physical_reads AS [TotalPhyReads],
+    qs.total_worker_time AS [TotalWorkerTime],
+    qs.execution_count AS [ExecutionCount],
+    qs.total_elapsed_time AS [Duration],
+    qs.plan_generation_num AS [NumRecompiles],
+    qs.statement_start_offset AS [StmtStartOffset]
+    FROM sys.dm_exec_query_stats qs
+    CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) AS qt
+    ORDER BY (total_logical_reads + total_logical_writes)/execution_count DESC
+  </query>
+  <query description="Global - Queries with the highest average CPU usage">
+    SELECT TOP 20
+     [ObjectName] = ISNULL(OBJECT_SCHEMA_NAME(qt.objectid,dbid) + '.' + OBJECT_NAME(qt.objectid, qt.dbid),'Adhoc query')
+    ,[TextData]           = SUBSTRING(qt.text, statement_start_offset/2 + 1,
+     (CASE WHEN statement_end_offset = -1 THEN LEN(CONVERT(nvarchar(MAX),text)) * 2
+     ELSE statement_end_offset END - statement_start_offset)/2)
+    ,[DiskReads]          = qs.total_physical_reads
+    ,[MemoryReads]        = qs.total_logical_reads
+    ,[Executions]         = qs.execution_count
+    ,[TotalCPUTime]       = qs.total_worker_time
+    ,[AverageCPUTime]     = qs.total_worker_time/qs.execution_count
+    ,[DiskWaitAndCPUTime] = qs.total_elapsed_time
+    ,[MemoryWrites]       = qs.max_logical_writes
+    ,[DateCached]         = qs.creation_time
+    ,[DatabaseName]       = DB_Name(qt.dbid)
+    ,[LastExecutionTime]  = qs.last_execution_time
+    FROM sys.dm_exec_query_stats AS qs
+    CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) AS qt
+    ORDER BY qs.total_worker_time/qs.execution_count DESC
+  </query>
+  <query description="Global - Queries with the most CPU overall">
+    SELECT TOP 20
+    ObjectName = ISNULL(OBJECT_SCHEMA_NAME(qt.objectid,dbid) + '.' + OBJECT_NAME(qt.objectid, qt.dbid),'Adhoc query')
+    ,DiskReads          = qs.total_physical_reads
+    ,MemoryReads        = qs.total_logical_reads
+    ,Executions         = qs.execution_count
+    ,TotalCPUTime       = qs.total_worker_time
+    ,AverageCPUTime     = qs.total_worker_time/qs.execution_count
+    ,DiskWaitAndCPUTime = qs.total_elapsed_time
+    ,MemoryWrites       = qs.max_logical_writes
+    ,DateCached         = qs.creation_time
+    ,DatabaseName       = DB_Name(qt.dbid)
+    ,LastExecutionTime  = qs.last_execution_time
+    ,[TextData]           = SUBSTRING(qt.text, statement_start_offset/2 + 1,
+    (CASE WHEN statement_end_offset = -1 THEN LEN(CONVERT(nvarchar(MAX),text)) * 2
+    ELSE statement_end_offset END - statement_start_offset)/2)
+    FROM sys.dm_exec_query_stats AS qs
+    CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) AS qt
+    ORDER BY qs.total_worker_time DESC
+  </query>
+  <query description="Global - Procedures memory consumption/execution">
+    SELECT TOP 20
+    DatabaseName       = DB_NAME(qt.dbid)
+    ,ObjectName         = OBJECT_SCHEMA_NAME(qt.objectid,dbid) + '.' + OBJECT_NAME(qt.objectid, qt.dbid)
+    ,DiskReads          = SUM(qs.total_physical_reads)
+    ,MemoryReads        = SUM(qs.total_logical_reads)
+    ,Executions         = SUM(qs.execution_count)
+    ,IO_Per_Execution   = SUM((qs.total_physical_reads + qs.total_logical_reads) / qs.execution_count)
+    ,CPUTime            = SUM(qs.total_worker_time)
+    ,DiskWaitAndCPUTime = SUM(qs.total_elapsed_time)
+    ,MemoryWrites       = SUM(qs.max_logical_writes)
+    ,DateLastExecuted   = MAX(qs.last_execution_time)
+    FROM sys.dm_exec_query_stats AS qs
+    CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) AS qt
+    GROUP BY DB_NAME(qt.dbid), OBJECT_SCHEMA_NAME(qt.objectid,dbid) + '.' + OBJECT_NAME(qt.objectid, qt.dbid)
+    ORDER BY IO_Per_Execution DESC
+  </query>
+  <query description="Global - Procedures memory consumption total">
+    SELECT TOP 20
+    DatabaseName        = DB_NAME(qt.dbid)
+    ,ObjectName         = OBJECT_SCHEMA_NAME(qt.objectid,dbid) + '.' + OBJECT_NAME(qt.objectid, qt.dbid)
+    ,DiskReads          = SUM(qs.total_physical_reads)
+    ,MemoryReads        = SUM(qs.total_logical_reads)
+    ,Total_IO_Reads     = SUM(qs.total_physical_reads + qs.total_logical_reads)
+    ,Executions         = SUM(qs.execution_count)
+    ,IO_Per_Execution   = SUM((qs.total_physical_reads + qs.total_logical_reads) / qs.execution_count)
+    ,CPUTime            = SUM(qs.total_worker_time)
+    ,DiskWaitAndCPUTime = SUM(qs.total_elapsed_time)
+    ,MemoryWrites       = SUM(qs.max_logical_writes)
+    ,DateLastExecuted   = MAX(qs.last_execution_time)
+    FROM sys.dm_exec_query_stats AS qs
+    CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) AS qt
+    GROUP BY DB_NAME(qt.dbid), OBJECT_SCHEMA_NAME(qt.objectid,dbid) + '.' + OBJECT_NAME(qt.objectid, qt.dbid)
+    ORDER BY Total_IO_Reads DESC
+  </query>
+  <query description="Global - Adhoc queries memory consumption/execution">
+    SELECT TOP 20  
+    DatabaseName        = DB_NAME(qt.dbid)
+    ,DiskReads          = SUM(qs.total_physical_reads)
+    ,MemoryReads        = SUM(qs.total_logical_reads) 
+    ,Total_IO_Reads     = SUM(qs.total_physical_reads + qs.total_logical_reads)
+    ,Executions         = SUM(qs.execution_count)
+    ,IO_Per_Execution   = SUM((qs.total_physical_reads + qs.total_logical_reads) / qs.execution_count)
+    ,CPUTime            = SUM(qs.total_worker_time)
+    ,DiskWaitAndCPUTime = SUM(qs.total_elapsed_time)
+    ,MemoryWrites       = SUM(qs.max_logical_writes)
+    ,DateLastExecuted   = MAX(qs.last_execution_time)
+    ,TextData           = qt.text
+    FROM sys.dm_exec_query_stats AS qs CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) AS qt
+    WHERE OBJECT_SCHEMA_NAME(qt.objectid,dbid) + '.' + OBJECT_NAME(qt.objectid, qt.dbid) IS NULL
+    GROUP BY DB_NAME(qt.dbid), qt.text, OBJECT_SCHEMA_NAME(qt.objectid,dbid) + '.' + OBJECT_NAME(qt.objectid, qt.dbid)
+    ORDER BY IO_Per_Execution DESC
+  </query>
+  <query description="Global - Adhoc queries memory consumption total">
+    SELECT TOP 20
+    DatabaseName       = DB_NAME(qt.dbid)
+    ,DiskReads          = SUM(qs.total_physical_reads) 
+    ,MemoryReads        = SUM(qs.total_logical_reads)  
+    ,Total_IO_Reads     = SUM(qs.total_physical_reads + qs.total_logical_reads)
+    ,Executions         = SUM(qs.execution_count)
+    ,IO_Per_Execution   = SUM((qs.total_physical_reads + qs.total_logical_reads) / qs.execution_count)
+    ,CPUTime            = SUM(qs.total_worker_time)
+    ,DiskWaitAndCPUTime = SUM(qs.total_elapsed_time)
+    ,MemoryWrites       = SUM(qs.max_logical_writes)
+    ,DateLastExecuted   = MAX(qs.last_execution_time)
+    ,TextData           = qt.text
+    FROM sys.dm_exec_query_stats AS qs
+    CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) AS qt
+    WHERE OBJECT_SCHEMA_NAME(qt.objectid,dbid) + '.' + OBJECT_NAME(qt.objectid, qt.dbid) IS NULL
+    GROUP BY DB_NAME(qt.dbid), qt.text, OBJECT_SCHEMA_NAME(qt.objectid,dbid) + '.' + OBJECT_NAME(qt.objectid, qt.dbid)
+    ORDER BY Total_IO_Reads DESC
+  </query>
+  <query description="Global - Components that consume the most memory">
+    SELECT type, SUM(multi_pages_kb)
+    FROM sys.dm_os_memory_clerks
+    WHERE multi_pages_kb != 0
+    GROUP BY type
+    ORDER BY SUM(multi_pages_kb) DESC
+  </query>
+  <query description="Global - Main consumers of buffer pool pages">
+    SELECT [type],
+    SUM(single_pages_kb) as [Single Pages],
+    SUM(multi_pages_kb) as [Multi Pages]
+    FROM sys.dm_os_memory_clerks
+    GROUP BY [type]
+  </query>
+  <query description="Global - Cache information">
+    SELECT DISTINCT
+    mcc.name, mcc.[type],
+    mcc.single_pages_kb,mcc.multi_pages_kb,
+    COALESCE(mcc.single_pages_in_use_kb,0) AS [SinglePagesInUseKB],
+    COALESCE(mcc.multi_pages_in_use_kb,0) AS [MultiPagesInUseKB],
+    mcc.entries_count,mcc.entries_in_use_count,
+    mcch.removed_all_rounds_count,mcch.removed_last_round_count
+    FROM sys.dm_os_memory_cache_counters mcc
+    JOIN sys.dm_os_memory_cache_clock_hands mcch
+    ON mcc.cache_address = mcch.cache_address
+  </query>
+  <query description="Stored Procedure I/O Requests">
+    SELECT DB_NAME(st.dbid) AS [DatabaseName]
+    ,OBJECT_SCHEMA_NAME(objectid,st.dbid) AS [SchemaName]
+    ,OBJECT_NAME(objectid,st.dbid) AS [StoredProcedure]
+    ,max(cp.usecounts) AS [ExecCount]
+    ,sum(qs.total_physical_reads + qs.total_logical_reads + qs.total_logical_writes) AS [Total_IO]
+    ,sum(qs.total_physical_reads + qs.total_logical_reads + qs.total_logical_writes) / (max(cp.usecounts)) AS [AvgTotal_IO]
+    ,sum(qs.total_physical_reads) AS [TotalPhyReads]
+    ,CAST(sum(qs.total_physical_reads) / (max(cp.usecounts) * 1.0) AS INT) [AvgPhyReads]
+    ,CAST(sum(qs.total_logical_reads) AS INT) AS [TotalLogicalReads]
+    ,CAST(sum(qs.total_logical_reads) / (max(cp.usecounts) * 1.0) AS INT) AS [AvgLogicalReads]
+    ,CAST(sum(qs.total_logical_writes) AS INT) AS [TotalLogicalWrites]
+    ,CAST(sum(qs.total_logical_writes) / (max(cp.usecounts) * 1.0) AS INT) AS [AvgLogicalWrites]
+    FROM sys.dm_exec_query_stats qs
+    CROSS APPLY sys.dm_exec_sql_text(qs.plan_handle) st
+    JOIN sys.dm_exec_cached_plans cp ON qs.plan_handle = cp.plan_handle
+    WHERE DB_NAME(st.dbid) IS NOT NULL AND cp.objtype = 'proc'
+    GROUP BY DB_NAME(st.dbid),OBJECT_SCHEMA_NAME(objectid,st.dbid), OBJECT_NAME(objectid,st.dbid)
+    ORDER BY SUM(qs.total_physical_reads + qs.total_logical_reads + qs.total_logical_writes) DESC
+  </query>
+  <query description="Stored Procedure Timing">
+    SELECT DB_NAME(st.dbid) AS [DatabaseName]
+    ,OBJECT_SCHEMA_NAME(objectid,st.dbid) AS [SchemaName]
+    ,OBJECT_NAME(objectid,st.dbid) AS [StoredProcedure]
+    ,max(cp.usecounts) AS [ExecCount]
+    ,sum(qs.total_elapsed_time) AS [TotalElapsedTime]
+    ,sum(qs.total_elapsed_time) / max(cp.usecounts) AS [AvgElapsedTime]
+    FROM sys.dm_exec_query_stats qs CROSS APPLY sys.dm_exec_sql_text(qs.plan_handle) st
+    JOIN sys.dm_exec_cached_plans cp ON qs.plan_handle = cp.plan_handle
+    WHERE DB_NAME(st.dbid) IS NOT NULL AND cp.objtype = 'proc'
+    GROUP BY DB_NAME(st.dbid),OBJECT_SCHEMA_NAME(objectid,st.dbid), OBJECT_NAME(objectid,st.dbid)
+    ORDER BY SUM(qs.total_elapsed_time) DESC
+  </query>
+  <query description="Find Index Fragmantation">
+    SELECT SCHEMA_NAME(o.schema_id) AS SchemaName
+    ,OBJECT_NAME(o.object_id) AS TableName
+    ,i.name  AS IndexName
+    ,i.type_desc AS IndexType
+    ,CASE WHEN ISNULL(ps.function_id,1) = 1 THEN 'NO' ELSE 'YES' END AS [Partitioned]
+    ,COALESCE(fg.name ,fgp.name) AS [FileGroup]
+    ,p.partition_number AS [PartitionNo]
+    ,p.rows AS PartitionRows
+    ,CAST(dmv.Avg_Fragmentation_In_Percent AS DECIMAL(16,2)) AS [AvgFrag%]
+    ,dmv.Fragment_Count AS [FragCount]
+    ,CAST(dmv.Avg_Fragment_Size_In_Pages AS DECIMAL(16,2)) AS [AvgFragInPages]
+    ,dmv.Page_Count AS [PageCount]
+    FROM sys.partitions AS p WITH (NOLOCK)
+    INNER JOIN sys.indexes AS i WITH (NOLOCK) ON i.object_id = p.object_id AND i.index_id = p.index_id
+    INNER JOIN sys.objects AS o WITH (NOLOCK) ON o.object_id = i.object_id
+    INNER JOIN sys.dm_db_index_physical_stats (DB_ID(), NULL, NULL , NULL, N'LIMITED') dmv ON dmv.OBJECT_ID = i.object_id AND dmv.index_id = i.index_id AND dmv.partition_number  = p.partition_number
+    LEFT JOIN sys.data_spaces AS ds WITH (NOLOCK) ON ds.data_space_id = i.data_space_id
+    LEFT JOIN sys.partition_schemes AS ps WITH (NOLOCK) ON ps.data_space_id = ds.data_space_id
+    LEFT JOIN sys.partition_functions AS pf WITH (NOLOCK) ON pf.function_id = ps.function_id
+    LEFT JOIN sys.destination_data_spaces AS dds WITH (NOLOCK) ON dds.partition_scheme_id = ps.data_space_id AND dds.destination_id = p.partition_number
+    LEFT JOIN sys.filegroups AS fg WITH (NOLOCK) ON fg.data_space_id = i.data_space_id
+    LEFT JOIN sys.filegroups AS fgp WITH (NOLOCK) ON fgp.data_space_id = dds.data_space_id
+    WHERE OBJECTPROPERTY(p.object_id, 'ISMSShipped') = 0 AND dmv.Avg_Fragmentation_In_Percent > 1
+    ORDER BY [AvgFrag%] DESC,SchemaName,TableName,IndexName,PartitionNo
+  </query>
+  <query description="Find Missing Indexes">
+    SELECT TOP 50
+    SCHEMA_NAME(t.SCHEMA_ID) AS [Schema],
+    OBJECT_NAME(dm_mid.OBJECT_ID,dm_mid.database_id) AS [TableName],
+    dm_migs.avg_user_impact * (dm_migs.user_seeks+dm_migs.user_scans) AS [AvgEstimatedImpact],
+    dm_migs.last_user_seek AS [LastUserSeek],
+    dm_mid.equality_columns AS [EqualityColumns],
+    dm_mid.inequality_columns AS [InequalityColumns],
+    dm_mid.included_columns AS [IncludedColumns],
+    'CREATE INDEX [IX_' + OBJECT_NAME(dm_mid.OBJECT_ID,dm_mid.database_id) + '_'
+    + REPLACE(REPLACE(REPLACE(ISNULL(dm_mid.equality_columns,''),', ','_'),'[',''),']','')
+    + CASE  WHEN dm_mid.equality_columns IS NOT NULL AND dm_mid.inequality_columns IS NOT NULL THEN '_' ELSE '' END
+    + REPLACE(REPLACE(REPLACE(ISNULL(dm_mid.inequality_columns,''),', ','_'),'[',''),']','')
+    + ']' + ' ON ' + dm_mid.statement + ' (' + ISNULL (dm_mid.equality_columns,'')
+    + CASE WHEN dm_mid.equality_columns IS NOT NULL AND dm_mid.inequality_columns IS NOT NULL THEN ',' ELSE '' END
+    + ISNULL (dm_mid.inequality_columns, '') + ')'
+    + ISNULL (' INCLUDE (' + dm_mid.included_columns + ')', '') AS [CreateStatement]
+    FROM sys.dm_db_missing_index_groups dm_mig
+    INNER JOIN sys.dm_db_missing_index_group_stats dm_migs ON dm_migs.group_handle = dm_mig.index_group_handle
+    INNER JOIN sys.dm_db_missing_index_details dm_mid  ON dm_mig.index_handle = dm_mid.index_handle
+    JOIN sys.tables t ON dm_mid.OBJECT_ID = t.OBJECT_ID
+    JOIN sys.databases d ON d.database_id = dm_mid.database_id
+    WHERE dm_mid.database_ID = DB_ID()
+    ORDER BY [AvgEstimatedImpact] DESC
+  </query>
+</queries>

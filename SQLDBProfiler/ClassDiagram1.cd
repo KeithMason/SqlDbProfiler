@@ -1,0 +1,129 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ClassDiagram MajorVersion="1" MinorVersion="1">
+  <Class Name="SQLDBProfiler.FindForm" Collapsed="true">
+    <Position X="5.75" Y="0.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>IAAAAAAAACACABAiAACAAAACAAAAAAAAAIAAAAAAQAA=</HashCode>
+      <FileName>FindForm.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SQLDBProfiler.ListViewNF" Collapsed="true">
+    <Position X="7.5" Y="0.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAA=</HashCode>
+      <FileName>ListViewNF.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SQLDBProfiler.MainForm" Collapsed="true">
+    <Position X="2.25" Y="1.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>jwWigv3kxqgTLTmmA8GRFAIWAB8uwQOijB4GMZO4Qsk=</HashCode>
+      <FileName>MainForm.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SQLDBProfiler.Program" Collapsed="true">
+    <Position X="0.5" Y="2.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAA=</HashCode>
+      <FileName>Program.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SQLDBProfiler.RTFBuilder" Collapsed="true">
+    <Position X="5.75" Y="2.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAARADAAAAgAIEAAAAQAAAAAAAAQAAAAAAAQABAQA=</HashCode>
+      <FileName>RtfBuilder.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SQLDBProfiler.CEventList" Collapsed="true">
+    <Position X="0.5" Y="0.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAACABAAAEAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>TraceReader\CEventList.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SQLDBProfiler.ComparisonOperators" Collapsed="true">
+    <Position X="2.25" Y="0.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>ACAAAAAAAAAAAAAAgIAAAAAAAAAAAAAAAAAAAQRBACA=</HashCode>
+      <FileName>TraceReader\ComparisonOperators.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SQLDBProfiler.EventList" Collapsed="true">
+    <Position X="4" Y="0.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAEAEQAACBAYAQAgAICSAAAgAAAAAAAAAAEEBAgA=</HashCode>
+      <FileName>TraceReader\EventList.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SQLDBProfiler.LogicalOperators" Collapsed="true">
+    <Position X="0.5" Y="1.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAgIAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>TraceReader\LogicalOperators.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SQLDBProfiler.ProfilerEvent" Collapsed="true">
+    <Position X="4" Y="1.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>gVBAAAEVAIEWTR6DYgAIJALiIgokAAJBEYaKNFXRgkA=</HashCode>
+      <FileName>TraceReader\ProfilerEvent.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SQLDBProfiler.ProfilerEventColumns" Collapsed="true">
+    <Position X="5.75" Y="1.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>gVBAAAEVAIEWTQaDYAAIIALiIgogAAJBEYKKNFVRggA=</HashCode>
+      <FileName>TraceReader\ProfilerEventColumns.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SQLDBProfiler.ProfilerEvents" Collapsed="true">
+    <Position X="7.5" Y="1.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>TraceReader\ProfilerEvents.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SQLDBProfiler.RawTraceReader" Collapsed="true">
+    <Position X="2.25" Y="2.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>kgAAAAAAAARAgQEQgQABAAggQEhAQBAAAAAkoCKQQAA=</HashCode>
+      <FileName>TraceReader\RawTraceReader.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SQLDBProfiler.SimpleEventList" Collapsed="true">
+    <Position X="0.5" Y="3.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAgAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAI=</HashCode>
+      <FileName>TraceReader\SimpleEventList.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SQLDBProfiler.Sqltokens" Collapsed="true">
+    <Position X="2.25" Y="3.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AgAAAAAAAAAAAAAACAAAAAIAAAACAAAIACAAAAAAoAA=</HashCode>
+      <FileName>TraceReader\SqlTokens.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SQLDBProfiler.TraceUtilities" Collapsed="true">
+    <Position X="4" Y="3.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>ElMFggAKACgIyBQgAABEAQIAEAAEIAIAAAEiRBCBAAA=</HashCode>
+      <FileName>TraceReader\TraceUtilities.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SQLDBProfiler.Properties.Resources" Collapsed="true">
+    <Position X="4" Y="2.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAABAAAABEAAAAQAAAAAAAAAAAAAAAIA=</HashCode>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="SQLDBProfiler.Properties.Settings" Collapsed="true">
+    <Position X="7.5" Y="2.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AEAAAAAAAEACBAiEAIAAIAAAAAABAAAAAQAAAAAACAA=</HashCode>
+      <FileName>Settings.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Font Name="Segoe UI" Size="9" />
+</ClassDiagram>
